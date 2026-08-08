@@ -1,0 +1,42 @@
+# macOS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node.js / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Local services and generated data
+.minio/
+uploads/
+tmp/
+output/
+
+# Source documents are local-only unless redistribution is explicitly approved.
+samples/**/*.pdf
+samples/private/
+samples/source-documents/
