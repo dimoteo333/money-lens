@@ -1,0 +1,39 @@
+{
+ "dataHeader": {
+  "trxCd": "RSRFO0401A01",
+  "result": "SUCCESS"
+ },
+ "dataBody": {
+  "grid01Cnt": 4,
+  "FORM_LIST": [
+   {
+    "순서": 1,
+    "FORM_ID": 2006041700300000,
+    "FORM_CATE_CD": "F01",
+    "제목": "예금거래기본약관 ",
+    "PDF_FILE_NM": "https://img.shinhan.com/sbank2016/yak/20060417003000000015LC000030.PDF?1782400802011"
+   },
+   {
+    "순서": 2,
+    "FORM_ID": 2006041700040000,
+    "FORM_CATE_CD": "F01",
+    "제목": "거치식예금약관 ",
+    "PDF_FILE_NM": "https://img.shinhan.com/sbank2016/yak/20060417000400000003LC000030.PDF?1633502136762"
+   },
+   {
+    "순서": 3,
+    "FORM_ID": 2018022086230000,
+    "FORM_CATE_CD": "F01",
+    "제목": "쏠편한 정기예금 특약 ",
+    "PDF_FILE_NM": "https://img.shinhan.com/sbank2016/yak/20180220862300000002LC00003000000031.PDF?1781623203918"
+   },
+   {
+    "순서": 4,
+    "FORM_ID": 2018022086240000,
+    "FORM_CATE_CD": "F03",
+    "제목": "쏠편한 정기예금 상품설명서 ",
+    "PDF_FILE_NM": "https://img.shinhan.com/sbank2016/seol/20180220862400000038LC000030.PDF?1784647331855"
+   }
+  ]
+ }
+}

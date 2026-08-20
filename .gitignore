@@ -40,3 +40,4 @@ output/
 samples/**/*.pdf
 samples/private/
 samples/source-documents/
+data/ingestion/
