@@ -124,24 +124,32 @@ def _split_oversized(lines: list[Line], lo: int, hi: int, max_chars: int):
         cur.append(i)
     if cur:
         groups.append(cur)
-    # merge groups until max_chars
+    # merge groups until max_chars; never emit a tiny (heading-only)
+    # buffer — headings ride with the body that follows them
     out: list[list[int]] = []
     buf: list[int] = []
     size = 0
     for g in groups:
         gsize = sum(len(lines[i].text) + 1 for i in g)
-        if buf and size + gsize > max_chars:
+        if gsize > max_chars:
+            parts = _split_sentences(lines, g)
+            if buf and size < 40:
+                parts[0] = buf + parts[0]      # heading joins first part
+            elif buf:
+                out.append(buf)
+            buf, size = [], 0
+            out.extend(parts)
+            continue
+        if buf and size >= 40 and size + gsize > max_chars:
             out.append(buf)
             buf, size = [], 0
-        # a single paragraph still over max_chars: split at sentence ends
-        if gsize > max_chars:
-            for part in _split_sentences(lines, g):
-                out.append(part)
-            continue
         buf.extend(g)
         size += gsize
     if buf:
-        out.append(buf)
+        if size < 40 and out:
+            out[-1].extend(buf)                # trailing scrap merges back
+        else:
+            out.append(buf)
     return out
 
 
@@ -214,6 +222,16 @@ def chunk_lines(lines: list[Line],
         buf_chars += size
         buf_articles += 1
     flush()
+
+    # merge a trailing near-empty chunk (부칙 scrap, table dregs) into the
+    # previous chunk so retrieval never sees noise-sized vectors
+    if len(chunks) >= 2 and len(chunks[-1].text) < 40:
+        last = chunks.pop()
+        prev = chunks[-1]
+        prev.text += "\n" + last.text
+        prev.page_end = last.page_end
+        prev.char_end = last.char_end
+        prev.n_articles += last.n_articles
 
     for i, c in enumerate(chunks):
         c.seq = i
