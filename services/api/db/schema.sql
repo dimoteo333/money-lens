@@ -96,7 +96,39 @@ CREATE TABLE IF NOT EXISTS chunk (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chunk_version ON chunk(document_version_id, seq);
--- pgvector lands in stage 3 (embedding); text search falls back to tsvector.
+-- Stage 3: embeddings. pgvector when available (compose ships
+-- pgvector/pgvector:pg16), real[] + cosine helper otherwise (bare
+-- Postgres dev boxes). Both backends take the same literal '[a,b,c]'.
+ALTER TABLE chunk ADD COLUMN IF NOT EXISTS embedding_model TEXT;
+
+DO $embed$
+DECLARE
+    has_vector boolean;
+BEGIN
+    SELECT EXISTS (SELECT 1 FROM pg_available_extensions
+                   WHERE name = 'vector') INTO has_vector;
+    IF has_vector THEN
+        CREATE EXTENSION IF NOT EXISTS vector;
+        EXECUTE 'ALTER TABLE chunk ADD COLUMN IF NOT EXISTS embedding vector(384)';
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_chunk_embedding_hnsw
+                 ON chunk USING hnsw (embedding vector_cosine_ops)';
+    ELSE
+        RAISE NOTICE 'pgvector not available: using real[] fallback (dev only)';
+        ALTER TABLE chunk ADD COLUMN IF NOT EXISTS embedding real[];
+    END IF;
+END
+$embed$;
+
+-- Fallback cosine similarity over real[] (dot of normalized vectors).
+-- Used by retrieval when the column type is real[]; pgvector uses <=>.
+CREATE OR REPLACE FUNCTION ml_cosine_sim(a real[], b real[]) RETURNS real
+LANGUAGE sql IMMUTABLE AS $$
+    SELECT COALESCE((
+        SELECT sum(x * y) FROM unnest(a, b) AS t(x, y)
+    ), 0)
+$$;
+
+-- Lexical fallback search (stage 3 retrieval A/B).
 CREATE INDEX IF NOT EXISTS idx_chunk_text_search
     ON chunk USING gin (to_tsvector('simple', text));
 

@@ -37,6 +37,13 @@ cp .env.example .env          # set POSTGRES_* / DATABASE_URL
 .venv/bin/python -m scripts.load_postgres \
     --manifest ../../data/ingestion/shinhan/<YYYYMMDD>/manifest.json
 .venv/bin/python -m scripts.chunk_postgres --data-root ../../data/ingestion
+
+# stage 3: embed chunks (local multilingual MiniLM, 384-dim)
+.venv/bin/pip install sentence-transformers   # optional, real model
+.venv/bin/python -m scripts.embed_postgres
+
+# retrieval smoke test with citation provenance
+.venv/bin/python -m scripts.retrieve "중도해지하면 이자는 어떻게 되나요" -k 5
 ```
 
 Schema: `db/schema.sql` — bank / collection_run / product / document /
