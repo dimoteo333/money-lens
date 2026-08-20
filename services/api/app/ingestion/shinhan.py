@@ -34,6 +34,8 @@ import httpx
 from .models import DocumentRecord, ProductRecord
 
 BASE = "https://m.shinhan.com"
+PC_BASE = "https://bank.shinhan.com"
+PC_ENDPOINT = PC_BASE + "/serviceEndpoint/httpDigital"
 ENDPOINT = BASE + "/serviceEndpoint/httpDigital"
 
 MOBILE_UA = (
@@ -113,6 +115,37 @@ class ShinhanClient:
             )
         return data.get("dataBody", {})
 
+    def pc_call(self, service_code: str, web_uri: str, body: dict) -> dict:
+        """Call a PC-web (bank.shinhan.com) service through the same gateway."""
+        self._throttle()
+        payload = {
+            "dataBody": {
+                **body,
+                "ricInptRootInfo": {
+                    "serviceType": "TG",
+                    "serviceCode": service_code,
+                    "webUri": web_uri,
+                    "language": "ko",
+                    "isRule": "N",
+                },
+            },
+            "dataHeader": {
+                "trxCd": "RSRIC1000A65",
+                "language": "ko",
+                "subChannel": "49",
+                "channelGbn": "D0",
+            },
+        }
+        resp = self._client.post(PC_ENDPOINT, json=payload)
+        resp.raise_for_status()
+        data = resp.json()
+        header = data.get("dataHeader", {})
+        if header.get("result") != "SUCCESS":
+            raise ShinhanCollectionError(
+                f"{service_code} failed: {header.get('result')} {header.get('resultCode')}"
+            )
+        return data.get("dataBody", {})
+
     def download(self, url: str, dest_dir: Path) -> Path:
         self._throttle()
         name = Path(urlsplit(url).path).name or "document.bin"
@@ -167,6 +200,56 @@ class ShinhanAdapter:
                 source_api="RSRDE0700A06",
                 source_page=page,
                 raw=it,
+            ))
+        return out
+
+    def list_online_products(self) -> list[ProductRecord]:
+        """All online-sellable products (PC 온라인신규 list, TDT1018).
+
+        Includes products the mobile category list omits (e.g. SOL메이트
+        index-linked deposits). Categories are inferred from product-code
+        prefix because this API has no category field.
+        """
+        body = self.client.pc_call(
+            "TDT1018", "/index.jsp",
+            {
+                "product_gubun": 1,
+                "product_srch_category": "",
+                "product_order": "2",
+                "product_srch": "",
+                "product_srch_name": "",
+                "product_srch_gubun": "1",
+                "C_JUMIN_NO": "BXM_SESSION_system:cid",
+            },
+        )
+        items = body.get("HPE_PRODUCT") or []
+        out = []
+        for it in items:
+            code = str(it.get("F_PROD_ID") or "").strip()
+            if not code:
+                continue
+            cat = code[:1] if code[:1] in ("1", "2") else ""
+            # 11xxxxx/21xxxxx 수신(입출금/적금·청약), 20xxxxx 예금(거치/지수연동)
+            if code.startswith("20"):
+                cat_code, cat_name = "S02", "예금"
+            elif code.startswith("23"):
+                cat_code, cat_name = "S03", "적금/청약"
+            elif code.startswith("22"):
+                cat_code, cat_name = "S03", "적금/청약"
+            else:
+                cat_code, cat_name = "S01", "입출금"
+            out.append(ProductRecord(
+                bank_code=self.bank_code,
+                product_code=code,
+                product_name=(it.get("F_PROD_NAME") or "").strip(),
+                category_code=cat_code,
+                category_name=cat_name,
+                summary=re.sub(r"<[^>]+>", " ", it.get("PRDT_INFORMATION") or "").strip(),
+                sale_start=str(it.get("SELL_START_DT") or ""),
+                sale_end=str(it.get("SELL_END_DT") or ""),
+                source_api="TDT1018",
+                source_page=PC_BASE + "/index.jsp?cr=020102010000",
+                raw={k: v for k, v in it.items() if isinstance(v, (str, int, float, bool))},
             ))
         return out
 
@@ -247,30 +330,49 @@ def collect_shinhan(out_root: Path, categories: Iterable[str] = ("S02",),
             ],
         }
         seen_products: set[str] = set()
+        # PC online-new list first: superset that includes index-linked deposits
+        # the mobile category list omits. Mobile list data overrides (richer raw).
+        try:
+            online = adapter.list_online_products()
+        except Exception as e:
+            online = []
+            manifest["notes"].append(f"online list failed: {e!r}")
+        mobile_first: dict[str, dict] = {}
         for cat in categories:
             products = adapter.list_products(cat)
             if limit_per_category:
                 products = products[:limit_per_category]
             for p in products:
-                if p.product_code in seen_products:
-                    continue
-                seen_products.add(p.product_code)
-                manifest["products"].append(p.to_dict())
-                docs = adapter.product_documents(p)
-                for d in docs:
-                    if download:
-                        dest = docs_dir / safe_filename(p.product_code, d.title, d.file_url)
-                        try:
-                            path = cli.download(d.file_url, docs_dir)
-                            path.rename(dest)
-                            d.local_path = str(dest.relative_to(base_dir))
-                            d.sha256 = sha256_of(dest)
-                            d.bytes = dest.stat().st_size
-                        except httpx.HTTPError as e:
-                            manifest["notes"].append(
-                                f"download failed: {d.title} {d.file_url}: {e!r}"
-                            )
-                    manifest["documents"].append(d.to_dict())
+                mobile_first[p.product_code] = p.to_dict()
+        for code, rec in mobile_first.items():
+            if code not in seen_products:
+                seen_products.add(code)
+                manifest["products"].append(rec)
+        for p in online:
+            if p.product_code in seen_products:
+                continue
+            seen_products.add(p.product_code)
+            manifest["products"].append(p.to_dict())
+
+        all_products = [ProductRecord(**rec) for rec in manifest["products"]]
+        for p in all_products:
+            if limit_per_category and p.source_api == "TDT1018" and p.product_code not in mobile_first:
+                continue  # respect smoke-test limits for online-only products
+            docs = adapter.product_documents(p)
+            for d in docs:
+                if download:
+                    dest = docs_dir / safe_filename(p.product_code, d.title, d.file_url)
+                    try:
+                        path = cli.download(d.file_url, docs_dir)
+                        path.rename(dest)
+                        d.local_path = str(dest.relative_to(base_dir))
+                        d.sha256 = sha256_of(dest)
+                        d.bytes = dest.stat().st_size
+                    except httpx.HTTPError as e:
+                        manifest["notes"].append(
+                            f"download failed: {d.title} {d.file_url}: {e!r}"
+                        )
+                manifest["documents"].append(d.to_dict())
         import json
         (base_dir / "manifest.json").write_text(
             json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8"
