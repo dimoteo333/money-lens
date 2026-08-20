@@ -1,0 +1,40 @@
+# Money Lens local stack (M0-02 walking skeleton).
+# Reproducible local MinIO only — demo/AWS deployment is out of scope here.
+# Usage: docker compose up -d && docker compose ps
+
+services:
+  minio:
+    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    container_name: money-lens-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-money-lens-local}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-money-lens-local-secret}
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # One-shot bucket init so both developers get the same local layout.
+  minio-init:
+    image: minio/mc:RELEASE.2025-01-17T23-25-50Z
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD &&
+      mc mb --ignore-existing local/${MINIO_BUCKET:-money-lens-local} &&
+      echo 'bucket ready'"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-money-lens-local}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-money-lens-local-secret}
+
+volumes:
+  minio-data:

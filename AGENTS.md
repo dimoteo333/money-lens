@@ -62,7 +62,28 @@ Until application commands are introduced, run:
 python3 -m json.tool schemas/product-facts.schema.json >/dev/null
 ```
 
-When code is scaffolded, replace this section with the exact install, lint, type-check, test, build, and end-to-end commands. CI and this file must remain consistent.
+## Repo Commands (M0-02 walking skeleton)
+
+API (FastAPI, Python 3.12):
+
+```bash
+cd services/api
+python3.12 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/uvicorn app.main:app --reload --port 8000   # GET /health
+.venv/bin/python -m pytest tests/ -q
+```
+
+Local MinIO (Docker Compose):
+
+```bash
+docker compose up -d && docker compose ps
+```
+
+Web (apps/web): scaffold owned by the web slice; commands land with that PR.
+
+When more code is scaffolded, replace this section with the exact lint, type-check, build, and end-to-end commands. CI and this file must remain consistent.
+
 
 Financial formula changes require:
 
