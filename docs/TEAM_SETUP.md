@@ -42,13 +42,12 @@ Use one agent workspace per issue or branch. Do not let two agents modify the sa
 
 ## Ownership
 
-The bootstrap commit records the known GitHub username. Min's username remains
-intentionally blank until it is confirmed.
+Min's GitHub username is confirmed as `@mindong-lee` (collaborator invite sent; acceptance pending as of 2026-08-20).
 
 | Area | Primary | Reviewer |
 |---|---|---|
-| Product scope and demo | Min | Jun (`@dimoteo333`) |
-| Accessible web experience | Min | Jun (`@dimoteo333`) |
+| Product scope and demo | Min (`@mindong-lee`) | Jun (`@dimoteo333`) |
+| Accessible web experience | Min (`@mindong-lee`) | Jun (`@dimoteo333`) |
 | Document and extraction pipeline | Jun (`@dimoteo333`) | Min |
 | Rules and calculations | Jun (`@dimoteo333`) | Min |
 | AWS, CI/CD, security, and cost | Jun (`@dimoteo333`) | Min |
