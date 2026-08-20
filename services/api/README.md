@@ -25,3 +25,19 @@ MinIO (from the repository root):
 docker compose up -d
 docker compose ps
 ```
+
+## PostgreSQL collection store
+
+```bash
+docker compose up -d          # minio + postgres
+cp .env.example .env          # set POSTGRES_* / DATABASE_URL
+
+# daily batch: collect then load
+.venv/bin/python -m scripts.collect_shinhan --out ../../data/ingestion
+.venv/bin/python -m scripts.load_postgres \
+    --manifest ../../data/ingestion/shinhan/<YYYYMMDD>/manifest.json
+```
+
+Schema: `db/schema.sql` — bank / collection_run / product / document /
+document_version. A new sha256 for the same form_id creates a
+document_version row (약관 개정 signal). Loading is idempotent per manifest.
