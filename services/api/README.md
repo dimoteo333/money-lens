@@ -36,6 +36,7 @@ cp .env.example .env          # set POSTGRES_* / DATABASE_URL
 .venv/bin/python -m scripts.collect_shinhan --out ../../data/ingestion
 .venv/bin/python -m scripts.load_postgres \
     --manifest ../../data/ingestion/shinhan/<YYYYMMDD>/manifest.json
+.venv/bin/python -m scripts.chunk_postgres --data-root ../../data/ingestion
 ```
 
 Schema: `db/schema.sql` — bank / collection_run / product / document /

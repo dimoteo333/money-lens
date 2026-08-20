@@ -76,4 +76,28 @@ CREATE INDEX IF NOT EXISTS idx_product_bank_category ON product(bank_code, categ
 CREATE INDEX IF NOT EXISTS idx_document_product ON document(product_id);
 CREATE INDEX IF NOT EXISTS idx_document_version_doc ON document_version(document_id, collected_at DESC);
 
+
+-- Stage 2: structure-aware chunks with page/char-span provenance.
+-- One chunk = one or more 제N조 units (or a split of an oversized unit),
+-- so retrieval answers can cite (title, page, span) in the actual PDF.
+CREATE TABLE IF NOT EXISTS chunk (
+    id                  BIGSERIAL PRIMARY KEY,
+    document_version_id BIGINT NOT NULL REFERENCES document_version(id) ON DELETE CASCADE,
+    seq                 INTEGER NOT NULL,       -- order within the version
+    heading             TEXT NOT NULL DEFAULT '',
+    text                TEXT NOT NULL,
+    page_start          INTEGER NOT NULL,
+    page_end            INTEGER NOT NULL,
+    char_start          INTEGER NOT NULL,       -- span into assembled doc text
+    char_end            INTEGER NOT NULL,
+    n_articles          INTEGER NOT NULL DEFAULT 1,
+    chunked_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (document_version_id, seq)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chunk_version ON chunk(document_version_id, seq);
+-- pgvector lands in stage 3 (embedding); text search falls back to tsvector.
+CREATE INDEX IF NOT EXISTS idx_chunk_text_search
+    ON chunk USING gin (to_tsvector('simple', text));
+
 COMMIT;
